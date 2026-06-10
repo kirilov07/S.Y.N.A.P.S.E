@@ -67,45 +67,25 @@ The entire AI inference stack runs locally on an NVIDIA Jetson Orin Nano. An Ard
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                  NVIDIA Jetson Orin Nano                 │
-│                                                         │
-│  ┌──────────────┐    ┌─────────────────────────────┐   │
-│  │  GStreamer   │───▶│        OpenCV pipeline       │   │
-│  │  (IMX219)    │    │   (frame capture + resize)   │   │
-│  └──────────────┘    └──────────────┬──────────────┘   │
-│                                     │                   │
-│              ┌──────────────────────┼──────────────┐   │
-│              ▼                      ▼               ▼   │
-│       ┌──────────┐          ┌──────────┐    ┌────────┐ │
-│       │ YOLOv8n  │          │ DeepFace │    │ Color  │ │
-│       │ (601 cls)│          │ (7 emo.) │    │ anal.  │ │
-│       └────┬─────┘          └────┬─────┘    └───┬────┘ │
-│            │                     │               │      │
-│            └─────────────────────┴───────────────┘      │
-│                                  │                       │
-│                      ┌───────────▼───────────┐          │
-│                      │  Mode decision engine  │          │
-│                      │  (FastAPI + business   │          │
-│                      │   logic layer)         │          │
-│                      └───────────┬───────────┘          │
-│                                  │                       │
-│                      ┌───────────▼───────────┐          │
-│                      │   pyserial bridge      │          │
-│                      │   (Jetson → Arduino)   │          │
-│                      └───────────┬───────────┘          │
-└──────────────────────────────────┼──────────────────────┘
-                                   │ USB serial
-                        ┌──────────▼───────────┐
-                        │   Arduino Mega 2560   │
-                        │   Relay control board │
-                        └──────────┬────────────┘
-                                   │
-                    ┌──────────────┴──────────────┐
-                    │  8× Ultrasonic Diffusers     │
-                    │  (individually switched)     │
-                    └─────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Jetson["NVIDIA Jetson Orin Nano"]
+        CAM[IMX219 camera] --> GST[GStreamer capture]
+        GST --> CV[OpenCV preprocess<br/>resize · normalize]
+        CV --> Y[YOLOv8n<br/>601 classes]
+        CV --> DF[DeepFace<br/>7 emotions]
+        CV --> COL[Color analysis]
+        Y --> DE[Mode decision engine<br/>FastAPI + business logic]
+        DF --> DE
+        COL --> DE
+        UI[13.3&quot; touchscreen UI] <--> DE
+        DE --> SER[pyserial bridge]
+    end
+
+    SER -- USB serial --> ARD[Arduino Mega 2560<br/>relay control board]
+    ARD --> D1[Diffuser 1]
+    ARD --> D2[Diffuser 2]
+    ARD --> DN[... Diffuser 8]
 ```
 
 **Inference loop:**
